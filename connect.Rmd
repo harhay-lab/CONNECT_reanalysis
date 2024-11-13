@@ -1,0 +1,242 @@
+---
+title: Reanalysis of the Care Management by Oncology Nurses to Address Supportive Care Needs cluster-randomized trials
+toc: True
+output: pdf_document
+fig_caption: yes
+bibliography: ref.bib 
+---
+
+We applied our developed method [@sace] to estimate the survivor average causal effect (SACE) as an evaluation of the intervention effect in the  clustered randomized clinical trial of the CONNECT (Care Management by Oncology Nurses to
+Address Supportive Care Needs) study [@connect]. 
+The trial  was conducted from July 25, 2016, to October 6, 2020 at 17 community general medical
+oncology practices within the University of Pittsburgh Medical
+Center Hillman Cancer Center Network in western Pennsylvania. Participants of the study were adult patients (aged $\geq 21$ years) with metastatic
+solid tumors for whom the oncologist would agree
+with the statement ``would not be surprised if the patient
+died in the next year." CONNECT used an oncology
+nurse led care management approach to improve the provision
+of primary palliative care within outpatient oncology
+practices. The clinical team's infusion room nurses were trained to address deficient
+care processes within their oncology practices.
+The intervention was designed to occur monthly over a
+3-month period, with CONNECT visits taking place before and/or
+after regularly scheduled oncology clinic visits. Enrolled patients
+who were randomized to CONNECT met with the same
+nurse for all visits, and nurses had the option of conducting these
+visits by telephone. Enrolled patients who were randomized to standard care received
+oncology care according to best practices, including all
+supportive measures deemed appropriate by the oncology
+team.
+
+```{r setup, echo = F,message=F,warning=F}
+knitr::opts_chunk$set(echo = F,message=F,warning=F)
+library(knitr)
+da=read.csv("CONNECT_Primary_Paper_Final.csv")
+hm=model.matrix(~as.factor(da$PT_ecog)-1)
+colnames(hm)=paste0("ecog",0:2)
+da=cbind(da,hm)
+da$treat=(da$random_id==1)*1
+death="PatientDied_Before_3M"
+ocs=c("PT_3M_FACIT_Pal_Score","PT_3M_ESAS_Score",
+"PT_3M_HADS_Dep_Score","PT_3M_HADS_Anx_Score")
+ocb=c("PT_BL_FACIT_Pal_Score","PT_BL_ESAS_Score",
+"PT_BL_HADS_Dep_Score","PT_BL_HADS_Anx_Score")
+sda=da[,c(death,"treat","PT_age","PT_BL_chemotherapy",ocs,ocb,paste0("ecog",0:2),"hospital_id")]
+tt=table(sda$treat)
+td=table(sda[,death],sda$treat)
+```
+
+Participants completed questionnaires at baseline and 3
+months, either through a telephone interview or on paper.
+Demographic data were collected from baseline questionnaires.
+The primary outcome was quality of life. At baseline and 3
+months, participants completed assessments of quality of life, FACIT  (Functional Assessment of
+Chronic Illness Therapy-Palliative care) score. 
+The score ranges from 0 to 184, with higher scores indicating
+better quality of life. Secondary outcomes include 
+the Edmonton Symptom Assessment
+Scale (ESAS) score which ranges from 0 to 90, with
+higher scores indicating greater symptom burden.
+The hospital anxiety subscale score and the hospital depression
+subscale score were also used where each score ranges from 0
+to 21 and
+scores $\geq 8$ indicates substantial anxiety or depression
+symptoms. However, the outcome scores were not measured if participants died, withdrew from the study, or were lost to follow-up. 
+
+The data set in our analysis has `r nrow(sda)` patients, 
+`r tt[2]` (`r round(100*tt[2]/sum(tt),2)`\%) are in the intervention arm. 
+During the study period, `r td[2,2]` (`r round(100*td[2,2]/sum(td[,2]),2)`\%) patients died in the intervention arm and `r td[2,1]` (`r round(100*td[2,1]/sum(td[,1]),2)`\%) patients died in the standard care arm. 
+ Table 1 shows the truncation frequency and the percentage for each
+of the outcome scores in each arm due to the reasons above. 
+Similar truncation percentages are observed for all the outcomes. 
+
+```{r}
+locs=c("FACIT-Pal total score","ESAS total score","Depression subscale score","Anxiety subscale score")
+tcount=lapply(sda[,ocs],function(x){table(sda$treat,is.na(x))[,2]})
+tc=matrix(unlist(tcount),4,2,byrow=T)
+tprop=lapply(sda[,ocs],function(x){round(prop.table(table(sda$treat,is.na(x)),1)[,2],4)})
+tp=matrix(unlist(tprop),4,2,byrow=T)*100
+tcp=cbind(paste0(tc[,1],", ",tp[,1]),paste0(tc[,2],", ",tp[,2]))
+rn=c("FACIT","ESAS","Depression","Anxiety")
+```
+
+```{r}
+rownames(tcp)=rn
+kable(tcp,'simple',caption="Truncation frequency and percentage for each outcome score by the
+arm.",col.names=c("CONNECT arm","Standard care arm"))
+```
+
+Figure 1 further shows the truncation proportion of the primary outcome FACIT score by cluster size
+for each arm. The plot suggests that the proportion is independent of the arm and also the cluster size. 
+Similar patterns are observed for the other outcome scores and are thus not shown. 
+
+```{r, fig.cap="The proportion of truncation for the outcome FACIT score in each cluster vs. the cluster size by arm"}
+tr.name="treat"
+cluster.name="hospital_id"
+sind=((is.na(sda[,ocs[1]]))*1)
+ts=table(sind,sda[,cluster.name],sda[,tr.name])
+tc=ts[,,1]
+otcs=colSums(tc)
+tcs=otcs[which(otcs>0)]
+ptc=tc[2,which(otcs>0)]/tcs
+tt=ts[,,2]
+otts=colSums(tt)
+tts=otts[which(otts>0)]
+ptt=tt[2,which(otts>0)]/tts
+par(mfrow=c(1,2),mar = c(4,0,3,0), oma = c(3,3,1,3),cex.axis=1.2)
+plot(tts,ptt,ylim=c(0,1),las=1,xlab="CONNECT arm",ylab="Proportion of truncation")
+plot(tcs,ptc,yaxt="n",ylim=c(0,1),xlab="Standard care arm")
+axis(4,las=1)
+mtext("Cluster size",1,outer=T,cex=1,line=-0.2)
+mtext(locs[1],3,outer=T,line=-1.5,cex=1.3)
+```
+
+We apply the proposed approaches in [@sace]
+to analyze each score at 3 months adjusting for the corresponding baseline score, age, chemotherapy
+treatment, and the Eastern Cooperative Oncology Group Performance Status score (0, 1 or 2). 
+For ease of reference, we abbreviate
+the fixed-effects only approach there as the FE approach, the approach with clustering in the outcome model only as the
+ME approach, and the approach with clustering in the outcome model and the membership model as the ME2 approach.
+R functions to implement the methods (FE, ME and ME2) are available online at 
+https://github.com/harhay-lab/SACE\_PS\_LMM.
+
+```{r}
+library(doParallel)
+tr.name="treat"
+cluster.name="hospital_id"
+van=c("PT_age","PT_BL_chemotherapy",paste0("ecog",1:2))
+ind=which(rowSums(is.na(sda[,c(van,ocb)]))==0)
+ssda=sda[ind,]
+rm(sda)
+source("fecode.R")
+source("mecode.R")
+source("me2code.R")
+source("bfun.R")
+uc=sort(unique(ssda[,cluster.name]))
+luc=length(uc)
+tc=table(ssda[,cluster.name],ssda[,tr.name])
+n=nrow(ssda)
+sda1=subset(ssda,treat==1)
+tcid=sort(unique(sda1[,cluster.name]))
+ltcid=length(tcid)
+n1=nrow(sda1)
+sda0=subset(ssda,treat==0)
+ccid=sort(unique(sda0[,cluster.name]))
+lccid=length(ccid)
+n0=nrow(sda0)
+sacefit=function(y.name,yb.name){
+ff=fsfun(ssda,y.name,tr.name,c(van,yb.name))
+cf=csfun(ssda,y.name,tr.name,c(van,yb.name),cluster.name)
+rf=rcsfun(ssda,y.name,tr.name,c(van,yb.name),cluster.name)
+return(list(ff=ff,cf=cf,rf=rf))}
+sfit=vector("list",4)
+for(k in 1:4){sfit[[k]]=sacefit(ocs[k],ocb[k])}
+icc=round(rbind(c(sfit[[1]]$cf[2],sfit[[1]]$rf[2],sfit[[1]]$rf[3]),
+c(sfit[[2]]$cf[2],sfit[[2]]$rf[2],sfit[[2]]$rf[3]),
+c(sfit[[3]]$cf[2],sfit[[3]]$rf[2],sfit[[3]]$rf[3]),
+c(sfit[[4]]$cf[2],sfit[[4]]$rf[2],sfit[[4]]$rf[3])),2)
+rownames(icc)=rn
+kable(icc,'simple',caption="The estimated outcome ICC from the ME and ME2 approaches,
+and the estimated ICC of the strata membership by the ME2 approach.",
+col.names=c("Outcome model (ME)","Outcome model (ME2)","Membership model (ME2)"))
+```
+
+The estimated outcome model intracluster correlation coefficients (ICC's) are in Table 2 from the ME and ME2 approaches,
+and the estimated ICC of the strata membership by the ME2 approach. The outcome model ICC's are similar by the two approaches. 
+
+```{r}
+esace=round(rbind(c(sfit[[1]]$ff[1],sfit[[1]]$cf[1],sfit[[1]]$rf[1]),
+c(sfit[[2]]$ff[1],sfit[[2]]$cf[1],sfit[[2]]$rf[1]),
+c(sfit[[3]]$ff[1],sfit[[3]]$cf[1],sfit[[3]]$rf[1]),
+c(sfit[[4]]$ff[1],sfit[[4]]$cf[1],sfit[[4]]$rf[1])),2)
+rownames(esace)=rn
+```
+
+```{r}
+ncc=detectCores()
+nbp=10
+pb=c(0.025,0.975)
+bci=matrix(0,4,6)
+for(j in 1:4){
+y.name=ocs[j]
+xnames=c(van,ocb[j])
+cl=makeCluster(ncc)
+registerDoParallel(cl)
+fsobj=foreach(icount(nbp),.combine='rbind',.multicombine=T,.maxcombine=nbp,
+.errorhandling ="remove") %dopar% {
+ind1=sample(n1,n1,replace=T)
+ind0=sample(n0,n0,replace=T)
+fsfun(rbind(sda1[ind1,],sda0[ind0,]),y.name,tr.name,xnames)}
+
+csobj=foreach(icount(nbp),.combine='rbind',.multicombine=T,.maxcombine=nbp,
+.errorhandling ="remove") %dopar% {
+source("mecode.R")
+source("bfun.R")
+s1=sample(tcid,ltcid,replace=T)
+s0=sample(ccid,lccid,replace=T)
+bda1=bda0=NULL
+for(jj in 1:ltcid){
+da1j=subset(sda1,hospital_id==s1[jj])
+da1j$bcid=jj
+bda1=rbind(bda1,da1j)}
+for(kk in 1:lccid){
+da0k=subset(sda0,hospital_id==s0[kk])
+da0k$bcid=kk
+bda0=rbind(bda0,da0k)}
+csfun(rbind(bda1,bda0),y.name,tr.name,xnames,"bcid")}
+
+rsobj=foreach(icount(nbp),.combine='rbind',.multicombine=T,.maxcombine=nbp,
+.errorhandling ="remove") %dopar% {
+source("me2code.R")
+source("bfun.R")
+s1=sample(tcid,ltcid,replace=T)
+s0=sample(ccid,lccid,replace=T)
+bda1=bda0=NULL
+for(jj in 1:ltcid){
+da1j=subset(sda1,hospital_id==s1[jj])
+da1j$bcid=jj
+bda1=rbind(bda1,da1j)}
+for(kk in 1:lccid){
+da0k=subset(sda0,hospital_id==s0[kk])
+da0k$bcid=kk
+bda0=rbind(bda0,da0k)}
+rcsfun(rbind(bda1,bda0),y.name,tr.name,xnames,"bcid")}
+stopCluster(cl) 
+bci[j,]=c(quantile(fsobj[,1],prob=pb),
+quantile(csobj[,1],prob=pb),quantile(rsobj[,1],prob=pb))}
+bci=round(bci,2)
+bsace=cbind(paste0(esace[,1]," (",bci[,1],", ",bci[,2],")"),
+paste0(esace[,2]," (",bci[,3],", ",bci[,4],")"),
+paste0(esace[,3]," (",bci[,5],", ",bci[,6],")"))
+rownames(bsace)=rn
+```
+
+Table 3 shows the SACE estimates together with their $95\%$ confidence intervals based on `r nbp` bootstrap replicates. 
+We obtain the confidence interval of the estimate using the bootstrap method of sampling the clusters with replacement.
+We randomly sample the treated clusters and the control clusters separately. For each bootstrap sample, we fit the
+model and obtain the SACE estimate. The $95\%$ confidence intervals are obtained from the $2.5\%$ and the $97.5\%$ quantiles of the
+bootstrap estimates.
+```{r}
+kable(bsace,'simple',caption="The estimated SACE by the FE, ME and ME2 approaches.",
+col.names=c("FE","ME","ME2"))
+```
